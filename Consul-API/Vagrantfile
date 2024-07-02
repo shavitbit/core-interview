@@ -13,8 +13,8 @@ Vagrant.configure("2") do |config|
       node.vm.network "private_network", ip: "192.168.56.5"
 
       # File provision
-      config.vm.provision "file", source: "configfiles/consul-server.hcl", destination: "~/installationconfig/consul.hcl"     #"/etc/consul.d/consul.hcl"
-      config.vm.provision "file", source:"configfiles/consul-service.config" , destination: "~/installationconfig/consul.service" #"/usr/lib/systemd/system/consul.service"
+      config.vm.provision "file", source: "configfiles/consul-server.hcl", destination: "~/installationconfig/consul.hcl"
+      config.vm.provision "file", source:"configfiles/consul-service.config" , destination: "~/installationconfig/consul.service"
       # Expose Consul API
       node.vm.network "forwarded_port", guest: 8500, host: 8500
       # Provisioning script to install Consul
@@ -49,6 +49,8 @@ Vagrant.configure("2") do |config|
         fi
       SHELL
     end
+    
+    
     config.vm.define "apache" do |apache|
       #Limit the cpu and memory
       apache.vm.provider "virtualbox" do |vb|
