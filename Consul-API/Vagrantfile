@@ -49,4 +49,44 @@ Vagrant.configure("2") do |config|
         fi
       SHELL
     end
-end
+    config.vm.define "apache" do |apache|
+      #Limit the cpu and memory
+      apache.vm.provider "virtualbox" do |vb|
+        vb.cpus = 1
+        vb.memory = 2048
+      end
+      apache.vm.hostname = "lx-apache"
+      apache.vm.box = "ubuntu/focal64" 
+      apache.vm.network "private_network", ip: "192.168.56.6" 
+      # File provision
+      apache.vm.provision "file", source: "configfiles/consul-client.hcl", destination: "~/installationconfig/consul.hcl"
+      apache.vm.provision "file", source:"configfiles/consul-service.config" , destination: "~/installationconfig/consul.service" 
+      apache.vm.provision "file", source: "configfiles/apache.hcl", destination: "~/installationconfig/apache.hcl"
+      # Provisioning script to install Consul
+      apache.vm.provision "shell", inline: <<-SHELL
+        sudo apt-get update
+        # Install Apache
+        sudo apt -y install apache2
+        # Change Apache to listen on port 8080
+        sudo sed -i 's/80/8080/g' /etc/apache2/ports.conf
+        sudo sed -i 's/:80/:8080/g' /etc/apache2/sites-available/000-default.conf
+        # Create a health check page
+        echo "<html><body><h1>Health Check OK</h1></body></html>" | sudo tee /var/www/html/health.html
+        sudo systemctl restart apache2
+        # Download and install Consul
+        wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+        echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+        sudo apt update && sudo apt install consul
+        consul --version
+        # change ownership to vagrant
+        sudo chown -R vagrant:vagrant /etc/consul.d /opt/consul/
+        # Start Consul
+        sudo mv -f /home/vagrant/installationconfig/consul.hcl /etc/consul.d/consul.hcl
+        sudo mv -f /home/vagrant/installationconfig/consul.service /usr/lib/systemd/system/consul.service
+        sudo mv -f /home/vagrant/installationconfig/apache.hcl /etc/consul.d/apache.hcl
+        rmdir /home/vagrant/installationconfig/
+        sudo systemctl enable consul.service
+        sudo systemctl start consul.service
+      SHELL
+    end
+  end

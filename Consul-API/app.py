@@ -15,9 +15,17 @@ def get_consul_status():
 # get_consul_summary
 def get_consul_summary():
     return 0
+
+
+
 # get_consul_members
 def get_consul_members():
-    return 0
+    try:
+        members = requests.get(f"{CONSUL_URL}/agent/members").json()
+        node_names = [member["Name"] for member in members]
+        return {"registered_nodes": node_names}
+    except requests.exceptions.RequestException as e:
+        return {"error": f"Failed to retrieve members: {e}"}
 # get_system_info
 def get_system_info():
     return 0
@@ -34,7 +42,7 @@ def summary():
 
 @app.route('/v1/api/consulCluster/members', methods=['GET'])
 def members():
-    return 200
+    return jsonify(get_consul_members())
 
 @app.route('/v1/api/consulCluster/systemInfo', methods=['GET'])
 def system_info():
