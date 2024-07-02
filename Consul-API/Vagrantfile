@@ -1,8 +1,9 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 Vagrant.configure("2") do |config|
-
+    # Define Consul server VM
     config.vm.define "consul-server" do |node|
+      #Limit the cpu and memory
       node.vm.provider "virtualbox" do |vb|
         vb.cpus = 1
         vb.memory = 2048
@@ -11,12 +12,41 @@ Vagrant.configure("2") do |config|
       node.vm.box = "ubuntu/focal64" 
       node.vm.network "private_network", ip: "192.168.56.5"
 
+      # File provision
+      config.vm.provision "file", source: "configfiles/consul-server.hcl", destination: "~/installationconfig/consul.hcl"     #"/etc/consul.d/consul.hcl"
+      config.vm.provision "file", source:"configfiles/consul-service.config" , destination: "~/installationconfig/consul.service" #"/usr/lib/systemd/system/consul.service"
+      # Expose Consul API
       node.vm.network "forwarded_port", guest: 8500, host: 8500
-
+      # Provisioning script to install Consul
       node.vm.provision "shell", inline: <<-SHELL
         sudo apt-get update
+        # Download and install Consul
         wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
         echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
         sudo apt update && sudo apt install consul
-        consul --version      
+        consul --version
+        # change ownership to vagrant
+        sudo chown -R vagrant:vagrant /etc/consul.d /opt/consul/
       SHELL
+      # Start Consul server
+      node.vm.provision "shell", inline: <<-SHELL
+        sudo mv -f /home/vagrant/installationconfig/consul.hcl /etc/consul.d/consul.hcl
+        sudo mv -f /home/vagrant/installationconfig/consul.service /usr/lib/systemd/system/consul.service
+        rmdir /home/vagrant/installationconfig/
+        sudo systemctl enable consul.service
+        sudo systemctl start consul.service
+      SHELL
+      # Sanity check for Consul server
+      node.vm.provision "shell", inline: <<-SHELL
+        echo "Performing sanity check on Consul server"
+        sleep 10
+        leader=$(curl -s http://127.0.0.1:8500/v1/status/leader)
+        if [ "$leader" != "\"\"" ]; then
+          echo "Consul server is up and running with leader: $leader"
+        else
+          echo "Failed to get the leader. Consul server might not be running correctly."
+          exit 1
+        fi
+      SHELL
+    end
+end
