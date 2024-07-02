@@ -1,9 +1,12 @@
+import datetime, platform,requests,psutil,sys,os,logging
 from flask import Flask, jsonify
-import requests
 
 app = Flask(__name__)
-CONSUL_URL = "http://127.0.0.1:8500/v1"
-# get_consul_status
+logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+
+CONSUL_URL = os.environ['CONSUL_URL']
+logging.info("Consul URL: "+CONSUL_URL)
+
 def get_consul_status():
     try:
         response = requests.get(f"{CONSUL_URL}/status/leader")
@@ -12,13 +15,22 @@ def get_consul_status():
     except requests.exceptions.RequestException as e:
         return {"status": 0, "message": f"Consul server is down: {e}"}
 
-# get_consul_summary
 def get_consul_summary():
-    return 0
+    try:
+        nodes = requests.get(f"{CONSUL_URL}/catalog/nodes").json()
+        services = requests.get(f"{CONSUL_URL}/catalog/services").json()
+        leader = requests.get(f"{CONSUL_URL}/status/leader").text
+        protocol = requests.get(f"{CONSUL_URL}/agent/self").json()["DebugConfig"]["RaftProtocol"]
 
+        return {
+            "registered_nodes": len(nodes),
+            "registered_services": len(services),
+            "leader": leader.strip().replace('"', ''),
+            "cluster_protocol": protocol
+        }
+    except requests.exceptions.RequestException as e:
+        return {"error": f"Failed to retrieve summary: {e}"}
 
-
-# get_consul_members
 def get_consul_members():
     try:
         members = requests.get(f"{CONSUL_URL}/agent/members").json()
@@ -26,11 +38,23 @@ def get_consul_members():
         return {"registered_nodes": node_names}
     except requests.exceptions.RequestException as e:
         return {"error": f"Failed to retrieve members: {e}"}
-# get_system_info
+
 def get_system_info():
-    return 0
-
-
+    system_info = {
+        "vCpus": psutil.cpu_count(),
+        "MemoryGB": round(psutil.virtual_memory().total / (1024 ** 3), 2),  # Convert bytes to GB
+        "DiskTotalGB": round(psutil.disk_usage('/').total / (1024 ** 3), 2),  # Convert bytes to GB
+        "DiskUsedGB": round(psutil.disk_usage('/').used / (1024 ** 3), 2),  # Convert bytes to GB
+        "DiskFreeGB": round(psutil.disk_usage('/').free / (1024 ** 3), 2),  # Convert bytes to GB
+        "CpuUsagePercent": psutil.cpu_percent(interval=1),
+        "MemoryUsagePercent": psutil.virtual_memory().percent,
+        "Platform": platform.system(),
+        "PlatformVersion": platform.version(),
+        "Hostname": platform.node(),
+        "Uptime": datetime.datetime.fromtimestamp(psutil.boot_time()),
+        
+    }
+    return system_info
 
 @app.route('/v1/api/consulCluster/status', methods=['GET'])
 def status():
@@ -38,7 +62,7 @@ def status():
 
 @app.route('/v1/api/consulCluster/summary', methods=['GET'])
 def summary():
-    return 200
+    return jsonify(get_consul_summary())
 
 @app.route('/v1/api/consulCluster/members', methods=['GET'])
 def members():
@@ -46,7 +70,7 @@ def members():
 
 @app.route('/v1/api/consulCluster/systemInfo', methods=['GET'])
 def system_info():
-    return 200
+    return jsonify(get_system_info())
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
