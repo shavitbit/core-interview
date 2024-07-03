@@ -14,12 +14,6 @@ This Vagrantfile sets up two VMs:
 
 Each VM is provisioned with necessary configurations and services to function in a Consul-based service discovery setup. The Vagrantfile ensures both VMs have the required resources, network configurations, and software installations to operate correctly.
 
-**Configuration Note:**
-In the consul-client.hcl and consul-server.hcl files, there is a line that configures the advertise_addr setting as follows:
-``` hcl
-advertise_addr = "{{ GetInterfaceIP `enp0s8` }}"
-```
-The enp0s8 interface is the network interface name used by VirtualBox for the private network. If your network interface name is different, you will need to update this setting in both files to match your actual network interface name.
 
 ### Consulapi Python WebApp
 This Python service, built with Flask, provides various endpoints to monitor a Consul cluster and gather system metrics from the host machine. The application retrieves and exposes information about the Consul cluster status, nodes, services, and system metrics such as CPU and memory usage.
